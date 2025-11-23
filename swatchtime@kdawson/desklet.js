@@ -5,6 +5,25 @@ const Gio = imports.gi.Gio;
 const GLib = imports.gi.GLib;
 const PopupMenu = imports.ui.popupMenu;
 
+// Write a small debug entry immediately when this file is evaluated so
+// we can confirm which copy Cinnamon actually loads (writes debug.txt).
+try {
+    const _dbgDir = GLib.get_home_dir() + '/.local/share/cinnamon/desklets/swatchtime@kdawson';
+    const _dbgPath = _dbgDir + '/debug.txt';
+    let now = (new Date()).toISOString();
+    try {
+        let [ok, contents] = GLib.file_get_contents(_dbgPath);
+        if (!ok) contents = '';
+        contents = contents + now + ' - file evaluated\n';
+        GLib.file_set_contents(_dbgPath, contents);
+    } catch (e) {
+        // if reading failed, just write new file
+        GLib.file_set_contents(_dbgPath, now + ' - file evaluated\n');
+    }
+} catch (e) {
+    log('swatchtime: debug write failed at top-level: ' + e);
+}
+
 function MyDesklet(metadata, desklet_id) {
     this._init(metadata, desklet_id);
 }
