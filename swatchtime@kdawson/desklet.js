@@ -14,6 +14,7 @@ MyDesklet.prototype = {
 
     _init: function(metadata, desklet_id) {
         Desklet.Desklet.prototype._init.call(this, metadata, desklet_id);
+        log('swatchtime: _init called for ' + metadata.uuid + ' id=' + desklet_id);
         this.metadata = metadata;
         this.deskletDir = GLib.get_home_dir() + '/.local/share/cinnamon/desklets/' + metadata.uuid;
 
@@ -28,18 +29,19 @@ MyDesklet.prototype = {
         };
 
         this._loadSettings();
+        log('swatchtime: settings after load: ' + JSON.stringify(this.settings));
         this.setupUI();
+        log('swatchtime: setupUI completed');
         this._startTimer();
     },
 
     setupUI: function() {
+        log('swatchtime: setupUI starting');
         // outer container
         this.container = new St.Bin({ reactive: true });
 
         // background box with padding and rounded style via inline CSS
         this.bg = new St.BoxLayout({ style_class: 'swatch-bg', vertical: false });
-
-        this._applyStyles();
 
         // flag icon (load from desklet folder)
         this.flag = null;
@@ -66,6 +68,9 @@ MyDesklet.prototype = {
 
         this.bg.add_actor(this.content);
 
+        // now that label and content exist, apply styles
+        this._applyStyles();
+
         // gear button to open settings menu (in-desklet)
         this.gearButton = new St.Button({ style_class: 'swatch-gear' });
         this.gearIcon = new St.Label({ text: '⚙', style_class: 'swatch-gear-icon' });
@@ -83,9 +88,14 @@ MyDesklet.prototype = {
         // create popup menu (re-usable)
         this.menu = new PopupMenu.PopupMenu(this.container, 0.0, St.Side.TOP);
         this.menuManagerAdd = imports.ui.main.panel ? null : null; // keep reference to avoid GC in some Cinnamon versions
+        log('swatchtime: popup menu created');
     },
 
     _applyStyles: function() {
+        if (!this.label) {
+            log('swatchtime: _applyStyles called but this.label is not set yet; skipping');
+            return;
+        }
         // Inline style for background (color + opacity + rounded corners + padding)
         const rgba = this._hexToRgba(this.settings.bgColor, this.settings.bgOpacity);
         this.bg.set_style('background-color: ' + rgba + '; border-radius: 40px; padding: 12px 24px;');
@@ -97,6 +107,7 @@ MyDesklet.prototype = {
     _startTimer: function() {
         if (this._timeout) Mainloop.source_remove(this._timeout);
         this._update();
+        log('swatchtime: starting timer');
         // update every 1 second
         this._timeout = Mainloop.timeout_add_seconds(1, () => {
             this._update();
@@ -107,7 +118,12 @@ MyDesklet.prototype = {
     _update: function() {
         const beats = this._calculateSwatchTime(new Date());
         let text = this.settings.showCentibeats ? `@${beats.toFixed(2)}` : `@${Math.floor(beats)}`;
-        this.label.set_text(text);
+        if (this.label && typeof this.label.set_text === 'function') {
+            this.label.set_text(text);
+            log('swatchtime: _update set text=' + text);
+        } else {
+            log('swatchtime: _update skipped because label is not available yet; computed text=' + text);
+        }
         return true;
     },
 
@@ -202,7 +218,7 @@ MyDesklet.prototype = {
                 }
             }
         } catch (e) {
-            // ignore, use defaults
+            log('swatchtime: _loadSettings error, using defaults: ' + e);
         }
     },
 
