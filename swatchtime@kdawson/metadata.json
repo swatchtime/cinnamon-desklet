@@ -1,0 +1,10 @@
+{
+"max-instances": "1",
+"uuid": "swatchtime@kdawson",
+"name": "Swatch Internet Time",
+"description": "Displays Swatch Internet Time on your desktop",
+"version": "1.0",
+"icon": "icon.png",
+"preview": "preview.png",
+"prevent-decorations": false
+}
