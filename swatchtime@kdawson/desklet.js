@@ -1,28 +1,20 @@
-const Desklet = imports.ui.desklet;
-const St = imports.gi.St;
-const Mainloop = imports.mainloop;
 const Gio = imports.gi.Gio;
+const St = imports.gi.St;
+const Desklet = imports.ui.desklet;
+const Mainloop = imports.mainloop;
 const GLib = imports.gi.GLib;
-const PopupMenu = imports.ui.popupMenu;
+const Gettext = imports.gettext;
+const Settings = imports.ui.settings;
+const Cinnamon = imports.gi.Cinnamon;
+const Lang = imports.lang;
+const Main = imports.ui.main;
+const Clutter = imports.gi.Clutter;
+const GdkPixbuf = imports.gi.GdkPixbuf;
+const Cogl = imports.gi.Cogl;
 
-// Write a small debug entry immediately when this file is evaluated so
-// we can confirm which copy Cinnamon actually loads (writes debug.txt).
-try {
-    const _dbgDir = GLib.get_home_dir() + '/.local/share/cinnamon/desklets/swatchtime@kdawson';
-    const _dbgPath = _dbgDir + '/debug.txt';
-    let now = (new Date()).toISOString();
-    try {
-        let [ok, contents] = GLib.file_get_contents(_dbgPath);
-        if (!ok) contents = '';
-        contents = contents + now + ' - file evaluated\n';
-        GLib.file_set_contents(_dbgPath, contents);
-    } catch (e) {
-        // if reading failed, just write new file
-        GLib.file_set_contents(_dbgPath, now + ' - file evaluated\n');
-    }
-} catch (e) {
-    log('swatchtime: debug write failed at top-level: ' + e);
-}
+const UUID = "swatchtime@kdawson";
+const DESKLET_ROOT = imports.ui.deskletManager.deskletMeta[UUID].path;
+
 
 function MyDesklet(metadata, desklet_id) {
     this._init(metadata, desklet_id);
@@ -33,7 +25,6 @@ MyDesklet.prototype = {
 
     _init: function(metadata, desklet_id) {
         Desklet.Desklet.prototype._init.call(this, metadata, desklet_id);
-        log('swatchtime: _init called for ' + metadata.uuid + ' id=' + desklet_id);
         this.metadata = metadata;
         this.deskletDir = GLib.get_home_dir() + '/.local/share/cinnamon/desklets/' + metadata.uuid;
 
@@ -42,20 +33,32 @@ MyDesklet.prototype = {
             showCentibeats: true,
             showLogo: true,
             bgColor: '#000000',
-            bgOpacity: 0.6,
+            bgOpacity: 0.3,
             fontColor: '#FFFFFF',
-            fontSize: 64
+            fontSize: 36
         };
 
-        this._loadSettings();
-        log('swatchtime: settings after load: ' + JSON.stringify(this.settings));
+        // Prefer GSettings (native) when available. Otherwise fall back to file-based settings.
+        this.gsettings = null;
+        try {
+            this.gsettings = new Gio.Settings({ schema_id: 'org.cinnamon.desklets.swatchtime' });
+            this.settings.showCentibeats = this.gsettings.get_boolean('show-centibeats');
+            this.settings.showLogo = this.gsettings.get_boolean('show-logo');
+            this.settings.bgColor = this.gsettings.get_string('bg-color');
+            this.settings.bgOpacity = this.gsettings.get_double('bg-opacity');
+            this.settings.fontColor = this.gsettings.get_string('font-color');
+            this.settings.fontSize = this.gsettings.get_int('font-size');
+            this.gsettings.connect('changed', (settings, key) => { this._onGSettingsChanged(key); });
+        } catch (e) {
+            this.gsettings = null;
+            this._loadSettings();
+        }
+
         this.setupUI();
-        log('swatchtime: setupUI completed');
         this._startTimer();
     },
 
     setupUI: function() {
-        log('swatchtime: setupUI starting');
         // outer container
         this.container = new St.Bin({ reactive: true });
 
@@ -66,67 +69,65 @@ MyDesklet.prototype = {
         this.flag = null;
         if (this.settings.showLogo) {
             try {
-                let flagPath = this.deskletDir + '/swiss-flag.png';
+                let flagPath = this.deskletDir + '/icon.png';
                 let file = Gio.file_new_for_path(flagPath);
                 if (file.query_exists(null)) {
                     let gicon = new Gio.FileIcon({ file: file });
                     this.flag = new St.Icon({ gicon: gicon, icon_size: Math.round(this.settings.fontSize * 0.9) });
                 }
-            } catch (e) {
-                log('Swatch desklet: failed to load flag: ' + e);
-            }
+            } catch (e) {}
         }
 
         // label for swatch beats
         this.label = new St.Label({ text: '@000', style_class: 'swatch-label' });
 
-        // center alignment container
-        this.content = new St.BoxLayout({ style_class: 'swatch-content', vertical: false, x_align: St.Align.MIDDLE });
-        if (this.flag) this.content.add_actor(this.flag);
-        this.content.add_actor(this.label);
+        // center alignment container (avoid name collision with Desklet.content)
+        this.inner = new St.BoxLayout({ style_class: 'swatch-content', vertical: false, x_align: St.Align.MIDDLE });
+        if (this.flag) this.inner.add_actor(this.flag);
+        this.inner.add_actor(this.label);
 
-        this.bg.add_actor(this.content);
+        this.bg.add_actor(this.inner);
 
         // now that label and content exist, apply styles
         this._applyStyles();
 
-        // gear button to open settings menu (in-desklet)
-        this.gearButton = new St.Button({ style_class: 'swatch-gear' });
-        this.gearIcon = new St.Label({ text: '⚙', style_class: 'swatch-gear-icon' });
-        this.gearButton.set_child(this.gearIcon);
-        this.gearButton.connect('button-press-event', () => { this._openSettingsMenu(); });
-
-        // pack bg and gear into container
-        let wrapper = new St.BoxLayout({ vertical: false });
-        wrapper.add_actor(this.bg);
-        wrapper.add_actor(this.gearButton);
-
-        this.container.add_actor(wrapper);
+        // pack bg into container (no in-desklet gear; use native Desklets manager settings)
+        this.wrapper = new St.BoxLayout({ vertical: false });
+        this.wrapper.add_actor(this.bg);
+        this.container.add_actor(this.wrapper);
         this.setContent(this.container);
 
-        // create popup menu (re-usable)
-        this.menu = new PopupMenu.PopupMenu(this.container, 0.0, St.Side.TOP);
-        this.menuManagerAdd = imports.ui.main.panel ? null : null; // keep reference to avoid GC in some Cinnamon versions
-        log('swatchtime: popup menu created');
     },
+
+    /* settings panel removed - using GSettings / manager preferences */
+
+    // settings panel removed - native manager (GSettings) provides preferences
 
     _applyStyles: function() {
         if (!this.label) {
-            log('swatchtime: _applyStyles called but this.label is not set yet; skipping');
             return;
         }
-        // Inline style for background (color + opacity + rounded corners + padding)
-        const rgba = this._hexToRgba(this.settings.bgColor, this.settings.bgOpacity);
-        this.bg.set_style('background-color: ' + rgba + '; border-radius: 40px; padding: 12px 24px;');
 
-        // label style
-        this.label.set_style('color: ' + this.settings.fontColor + '; font-size: ' + Math.round(this.settings.fontSize) + 'px; font-weight: 400; padding-left: 12px; padding-right: 12px;');
+        // Make outer container and wrapper transparent so only the pill shows
+        try {
+            this.container.set_style('background: transparent; padding: 0;');
+            if (this.wrapper) this.wrapper.set_style('background: transparent; padding: 0; align-items: center;');
+        } catch (e) {}
+
+        // Inline style for the pill background (color + opacity + rounded corners + padding + shadow)
+        const rgba = this._hexToRgba(this.settings.bgColor, this.settings.bgOpacity);
+        const pillStyle = 'background-color: ' + rgba + '; border-radius: 40px; padding: 8px 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.6); display: flex; align-items: center;';
+        this.bg.set_style(pillStyle);
+
+        // label style (font size + color)
+        this.label.set_style('color: ' + this.settings.fontColor + '; font-size: ' + Math.round(this.settings.fontSize) + 'px; font-weight: 400; margin-left: 12px; margin-right: 12px;');
+
+        // No in-desklet gear styling (native manager will provide settings UI)
     },
 
     _startTimer: function() {
         if (this._timeout) Mainloop.source_remove(this._timeout);
         this._update();
-        log('swatchtime: starting timer');
         // update every 1 second
         this._timeout = Mainloop.timeout_add_seconds(1, () => {
             this._update();
@@ -139,10 +140,7 @@ MyDesklet.prototype = {
         let text = this.settings.showCentibeats ? `@${beats.toFixed(2)}` : `@${Math.floor(beats)}`;
         if (this.label && typeof this.label.set_text === 'function') {
             this.label.set_text(text);
-            log('swatchtime: _update set text=' + text);
-        } else {
-            log('swatchtime: _update skipped because label is not available yet; computed text=' + text);
-        }
+        } 
         return true;
     },
 
@@ -152,76 +150,15 @@ MyDesklet.prototype = {
         const utcMinutes = date.getUTCMinutes();
         const utcSeconds = date.getUTCSeconds();
         const utcMilliseconds = date.getUTCMilliseconds();
-
         // Convert to BMT (UTC+1)
         const bmtHours = (utcHours + 1) % 24;
-
         // total seconds since midnight BMT
         const totalSeconds = (bmtHours * 3600) + (utcMinutes * 60) + utcSeconds + (utcMilliseconds / 1000);
-
         const beats = (totalSeconds / 86.4) % 1000; // 86400 / 1000 = 86.4
         return beats;
     },
 
-    _openSettingsMenu: function() {
-        // Clear existing menu items
-        this.menu.removeAll();
-
-        let item1 = new PopupMenu.PopupMenuItem(this.settings.showCentibeats ? 'Disable centibeats' : 'Enable centibeats');
-        item1.connect('activate', () => { this.settings.showCentibeats = !this.settings.showCentibeats; this._saveSettings(); this._applyStyles(); this._update(); });
-        this.menu.addMenuItem(item1);
-
-        let item2 = new PopupMenu.PopupMenuItem(this.settings.showLogo ? 'Hide logo' : 'Show logo');
-        item2.connect('activate', () => {
-            this.settings.showLogo = !this.settings.showLogo;
-            if (this.settings.showLogo && !this.flag) {
-                try {
-                    let flagPath = this.deskletDir + '/swiss-flag.png';
-                    let file = Gio.file_new_for_path(flagPath);
-                    if (file.query_exists(null)) {
-                        let gicon = new Gio.FileIcon({ file: file });
-                        this.flag = new St.Icon({ gicon: gicon, icon_size: Math.round(this.settings.fontSize * 0.9) });
-                        this.content.insert_actor(this.flag, 0);
-                    }
-                } catch (e) { log('swatch: failed to re-add flag: ' + e); }
-            } else if (!this.settings.showLogo && this.flag) {
-                this.content.remove_actor(this.flag);
-                this.flag = null;
-            }
-            this._saveSettings();
-        });
-        this.menu.addMenuItem(item2);
-
-        // Quick background opacity stepper
-        let opItem = new PopupMenu.PopupMenuItem('Toggle opacity (cycle)');
-        opItem.connect('activate', () => {
-            const steps = [0.2, 0.4, 0.6, 0.8, 1.0];
-            let i = steps.indexOf(this.settings.bgOpacity);
-            i = (i + 1) % steps.length;
-            this.settings.bgOpacity = steps[i];
-            this._saveSettings();
-            this._applyStyles();
-        });
-        this.menu.addMenuItem(opItem);
-
-        let fontItem = new PopupMenu.PopupMenuItem('Cycle font size');
-        fontItem.connect('activate', () => {
-            const sizes = [36, 48, 64, 80];
-            let i = sizes.indexOf(this.settings.fontSize);
-            if (i === -1) i = 0; else i = (i + 1) % sizes.length;
-            this.settings.fontSize = sizes[i];
-            if (this.flag) this.flag.set_icon_size(Math.round(this.settings.fontSize * 0.9));
-            this._saveSettings();
-            this._applyStyles();
-        });
-        this.menu.addMenuItem(fontItem);
-
-        let saveItem = new PopupMenu.PopupMenuItem('Reset to defaults');
-        saveItem.connect('activate', () => { this._resetSettings(); });
-        this.menu.addMenuItem(saveItem);
-
-        this.menu.open();
-    },
+    /* popup menu removed - use native preferences via GSettings */
 
     _getSettingsPath: function() {
         return this.deskletDir + '/settings.json';
@@ -236,18 +173,23 @@ MyDesklet.prototype = {
                     this.settings[k] = parsed[k];
                 }
             }
-        } catch (e) {
-            log('swatchtime: _loadSettings error, using defaults: ' + e);
-        }
+        } catch (e) {}
     },
 
     _saveSettings: function() {
         try {
-            let data = JSON.stringify(this.settings);
-            GLib.file_set_contents(this._getSettingsPath(), data);
-        } catch (e) {
-            log('Swatch desklet: failed to save settings: ' + e);
-        }
+            if (this.gsettings) {
+                this.gsettings.set_boolean('show-centibeats', !!this.settings.showCentibeats);
+                this.gsettings.set_boolean('show-logo', !!this.settings.showLogo);
+                this.gsettings.set_string('bg-color', String(this.settings.bgColor));
+                this.gsettings.set_double('bg-opacity', Number(this.settings.bgOpacity));
+                this.gsettings.set_string('font-color', String(this.settings.fontColor));
+                this.gsettings.set_int('font-size', Number(this.settings.fontSize));
+            } else {
+                let data = JSON.stringify(this.settings);
+                GLib.file_set_contents(this._getSettingsPath(), data);
+            }
+        } catch (e) {}
     },
 
     _resetSettings: function() {
@@ -260,18 +202,18 @@ MyDesklet.prototype = {
             fontSize: 64
         };
         // rebuild UI minimally
-        if (this.flag) this.content.remove_actor(this.flag);
+        if (this.flag) this.inner.remove_actor(this.flag);
         this.flag = null;
         if (this.settings.showLogo) {
-            try {
-                let flagPath = this.deskletDir + '/swiss-flag.png';
+                try {
+                let flagPath = this.deskletDir + '/icon.png';
                 let file = Gio.file_new_for_path(flagPath);
                 if (file.query_exists(null)) {
                     let gicon = new Gio.FileIcon({ file: file });
                     this.flag = new St.Icon({ gicon: gicon, icon_size: Math.round(this.settings.fontSize * 0.9) });
-                    this.content.insert_actor(this.flag, 0);
+                    this.inner.insert_actor(this.flag, 0);
                 }
-            } catch (e) { log('swatch: reset error: ' + e); }
+            } catch (e) {}
         }
         this._saveSettings();
         this._applyStyles();
@@ -284,6 +226,49 @@ MyDesklet.prototype = {
         const g = parseInt(c.substring(2,4), 16);
         const b = parseInt(c.substring(4,6), 16);
         return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    },
+
+    _onGSettingsChanged: function(key) {
+        try {
+            if (!this.gsettings) return;
+            switch (key) {
+                case 'show-centibeats':
+                    this.settings.showCentibeats = this.gsettings.get_boolean('show-centibeats');
+                    break;
+                case 'show-logo':
+                    this.settings.showLogo = this.gsettings.get_boolean('show-logo');
+                    if (this.settings.showLogo && !this.flag) {
+                        try {
+                            let flagPath = this.deskletDir + '/icon.png';
+                            let file = Gio.file_new_for_path(flagPath);
+                            if (file.query_exists(null)) {
+                                let gicon = new Gio.FileIcon({ file: file });
+                                this.flag = new St.Icon({ gicon: gicon, icon_size: Math.round(this.settings.fontSize * 0.9) });
+                                this.inner.insert_actor(this.flag, 0);
+                            }
+                        } catch (e) {}
+                    } else if (!this.settings.showLogo && this.flag) {
+                        this.inner.remove_actor(this.flag);
+                        this.flag = null;
+                    }
+                    break;
+                case 'bg-color':
+                    this.settings.bgColor = this.gsettings.get_string('bg-color');
+                    break;
+                case 'bg-opacity':
+                    this.settings.bgOpacity = this.gsettings.get_double('bg-opacity');
+                    break;
+                case 'font-color':
+                    this.settings.fontColor = this.gsettings.get_string('font-color');
+                    break;
+                case 'font-size':
+                    this.settings.fontSize = this.gsettings.get_int('font-size');
+                    if (this.flag) this.flag.set_icon_size(Math.round(this.settings.fontSize * 0.9));
+                    break;
+            }
+            this._applyStyles();
+            this._update();
+        } catch (e) {}
     },
 
     on_desklet_removed: function() {
