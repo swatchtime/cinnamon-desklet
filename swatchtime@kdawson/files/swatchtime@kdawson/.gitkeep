@@ -1,0 +1,2 @@
+# This file ensures the logs directory is preserved in Git
+# The logs directory is needed for error reporting and analytics
