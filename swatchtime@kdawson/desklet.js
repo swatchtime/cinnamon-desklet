@@ -36,6 +36,13 @@ MyDesklet.prototype = {
         this.settings.bind('font-size', 'fontSize', this._onSettingsChanged);
 
         this._onSettingsChanged();
+
+        // Initialize desklet in bottom-right corner
+        if (this.get_x_position() === 0 && this.get_y_position() === 0) {
+            this.set_x_position(global.screen_width - 200);
+            this.set_y_position(global.screen_height - 100);
+        }
+
         this.setupUI();
         this._startTimer();
     },
@@ -91,25 +98,44 @@ MyDesklet.prototype = {
             if (this.wrapper) this.wrapper.set_style('background: transparent; padding: 0; align-items: center;');
         } catch (e) {}
 
-        // Inline style for the pill background (color + opacity + rounded corners + padding + shadow)
-        const rgba = this._hexToRgba(this.bgColor, this.bgOpacity);
+        // Inline style for the pill background
+        const rgba = this._colorToRgba(this.bgColor, this.bgOpacity);
         const pillStyle = 'background-color: ' + rgba + '; border-radius: 40px; padding: 8px 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.6); display: flex; align-items: center;';
         this.bg.set_style(pillStyle);
-
-        // label style (font size + color)
-        this.label.set_style('color: ' + this.fontColor + '; font-size: ' + Math.round(this.fontSize) + 'px; font-weight: 400; margin-left: 12px; margin-right: 12px;');
-
-        // No in-desklet gear styling (native manager will provide settings UI)
+        let margin = Math.round(this.fontSize * 0.4);
+        this.label.set_style(
+            'color: ' + this.fontColor + ';' +
+            'font-size: ' + Math.round(this.fontSize) + 'px;' +
+            'font-weight: 400;' +
+            'margin-left: ' + margin + 'px;' +
+            'margin-right: ' + margin + 'px;'
+        );
     },
 
-    _hexToRgba: function(hex, alpha) {
-        // Remove # if present
-        hex = hex.replace('#', '');
-        // Parse r, g, b values
-        let r = parseInt(hex.substring(0, 2), 16);
-        let g = parseInt(hex.substring(2, 4), 16);
-        let b = parseInt(hex.substring(4, 6), 16);
-        // Return rgba string
+    _colorToRgba: function(color, alpha) {
+        let r = 0, g = 0, b = 0;
+        if (color.startsWith('#')) {
+            // Parse hex (e.g., #rrggbb or #rrggbbaa, ignore alpha if present)
+            color = color.replace('#', '');
+            if (color.length >= 6) {
+                r = parseInt(color.substring(0, 2), 16);
+                g = parseInt(color.substring(2, 4), 16);
+                b = parseInt(color.substring(4, 6), 16);
+            }
+        } else {
+            // Parse rgb(r,g,b) or rgba(r,g,b,a)
+            const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+            if (match) {
+                r = parseInt(match[1], 10);
+                g = parseInt(match[2], 10);
+                b = parseInt(match[3], 10);
+                // We ignore the stored alpha and use the passed alpha
+            }
+        }
+        // Fallback to black if parsing fails
+        if (isNaN(r) || isNaN(g) || isNaN(b)) {
+            return 'rgba(0,0,0,' + alpha + ')';
+        }
         return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
     },
 
@@ -125,10 +151,17 @@ MyDesklet.prototype = {
 
     _update: function() {
         const beats = this._calculateSwatchTime(new Date());
-        let text = this.showCentibeats ? `@${beats.toFixed(2)}` : `@${Math.floor(beats)}`;
+        let beatInteger = Math.floor(beats); // 0 to 999
+        let text;
+        if (this.showCentibeats) {
+            text = `@${beats.toFixed(2)}`; // e.g. @123.45
+        } else {
+            // Always 3 digits with leading zeros (e.g. @000)
+            text = '@' + String(beatInteger).padStart(3, '0');
+        }
         if (this.label && typeof this.label.set_text === 'function') {
             this.label.set_text(text);
-        } 
+        }
         return true;
     },
 
