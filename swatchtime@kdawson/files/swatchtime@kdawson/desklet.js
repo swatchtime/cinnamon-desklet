@@ -36,13 +36,6 @@ MyDesklet.prototype = {
         this.settings.bind('font-size', 'fontSize', this._onSettingsChanged);
 
         this._onSettingsChanged();
-
-        // Initialize desklet in bottom-right corner
-        if (this.get_x_position() === 0 && this.get_y_position() === 0) {
-            this.set_x_position(global.screen_width - 200);
-            this.set_y_position(global.screen_height - 100);
-        }
-
         this.setupUI();
         this._startTimer();
     },
@@ -154,7 +147,9 @@ MyDesklet.prototype = {
         let beatInteger = Math.floor(beats); // 0 to 999
         let text;
         if (this.showCentibeats) {
-            text = `@${beats.toFixed(2)}`; // e.g. @123.45
+            let paddedInteger = String(beatInteger).padStart(3, '0');
+            let fractional = (beats - beatInteger).toFixed(2).substring(1);
+            text = `@${paddedInteger}${fractional}`;
         } else {
             // Always 3 digits with leading zeros (e.g. @000)
             text = '@' + String(beatInteger).padStart(3, '0');

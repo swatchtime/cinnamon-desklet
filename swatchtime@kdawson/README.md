@@ -12,26 +12,18 @@ This Cinnamon desklet displays the Swatch Internet Time in "beats". Swatch Inter
 
 Tested and developed on Linux Mint Debian Edition (LMDE) 7 using Cinnamon 6.4.13
 
-
 ## Features:
 
 - Displays Swatch Internet Time in beats
-- Has a setting to display centibeats (e.g. @000.00)
+- Display centibeats (e.g. @000.00)
 - Adjustable background color and opacity
 - Adjustable font-size
-- Has a setting to show/hide the logo
-- Has a setting to show/hide the frame border (can show digits only)
+- Show/hide logo
 
 ## Author:
 
-Ken Dawson (admin@swatchtime.online)
+Ken Dawson (https://github.com/kendawson-online)
 
 GitHub: https://github.com/swatchtime/
 
 Report issues: https://github.com/swatchtime/cinnamon-desklet/issues
-
-## License:
-
-MIT
-
-
