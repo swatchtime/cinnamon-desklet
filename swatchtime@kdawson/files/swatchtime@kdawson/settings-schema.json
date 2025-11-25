@@ -17,24 +17,24 @@
     "description": "Background color",
     "tooltip": "Background color"
   },
-  "bg-opacity": {
-    "type": "scale",
-    "default": 0.0,
-    "min": 0.0,
-    "max": 1.0,
-    "step": 0.01,
-    "description": "Background opacity",
-    "tooltip": "Background opacity"
-  },
   "font-color": {
     "type": "colorchooser",
     "default": "rgb(255,255,255)",
     "description": "Font color",
     "tooltip": "Font color"
   },
+  "bg-opacity": {
+    "type": "scale",
+    "default": 0.5,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.01,
+    "description": "Background opacity",
+    "tooltip": "Background opacity"
+  },
   "font-size": {
     "type": "scale",
-    "default": 24,
+    "default": 28,
     "min": 12,
     "max": 256,
     "step": 1,
