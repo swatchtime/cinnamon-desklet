@@ -47,4 +47,12 @@ GitHub: https://github.com/swatchtime/cinnamon-desklet
 
 Tested and developed on Linux Mint Debian Edition (LMDE) 7 using Cinnamon 6.4.13
 
+<br><br>
+
+### Disclaimer:
+
+This is a fan-made revival and is not affiliated with or endorsed by Swatch Group.
+
+<br><br>
+
 Last updated: Nov. 24, 2025
