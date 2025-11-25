@@ -6,5 +6,8 @@
     "version": "1.0",
     "max-instances": "10",
     "settings-schema": "settings-schema.json",
-    "prevent-decorations": true
+    "prevent-decorations": true,
+    "author": "Ken Dawson (kendawson-online)",
+    "cinnamon-version": "5.0",
+    "license": "MIT"
 }
