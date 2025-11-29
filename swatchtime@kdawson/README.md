@@ -27,3 +27,7 @@ Ken Dawson (https://github.com/kendawson-online)
 GitHub: https://github.com/swatchtime/
 
 Report issues: https://github.com/swatchtime/cinnamon-desklet/issues
+
+## Note: Rounding and display (desklet)
+
+When showing centibeats the desklet uses two-decimal precision. To avoid briefly showing `1000.00` at the midnight rollover (a raw value such as `999.995` can round to `1000.00`), the desklet rounds to two decimals and wraps values >= 1000 back into range before display. This prevents an invalid intermediate display and matches the canonical beat range `@000.00`–`@999.99`.

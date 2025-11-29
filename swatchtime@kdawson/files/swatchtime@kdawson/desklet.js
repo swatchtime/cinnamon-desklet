@@ -165,8 +165,11 @@ MyDesklet.prototype = {
         // then divide by 86.4 to get fractional beats.
         const utcSecondsSinceMidnight = date.getUTCHours() * 3600 + date.getUTCMinutes() * 60 + date.getUTCSeconds() + date.getUTCMilliseconds() / 1000;
         const bielSeconds = (utcSecondsSinceMidnight + 3600) % 86400;
-        const beats = bielSeconds / 86.4;
-        return beats;
+        const rawBeats = bielSeconds / 86.4;
+        // Round to 2 decimals then wrap 1000 -> 0 to avoid transient 1000.00 display
+        let rounded = Math.round(rawBeats * 100) / 100;
+        if (rounded >= 1000) rounded = rounded - 1000;
+        return rounded;
     },
 
 
