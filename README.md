@@ -2,6 +2,8 @@
 
 **version 1.0**
 
+Now available at: https://cinnamon-spices.linuxmint.com/desklets/view/88
+
 This [Cinnamon](https://cinnamon-spices.linuxmint.com/desklets) desklet displays the Swatch Internet Time in "beats". Swatch Internet Time is a decimal time concept introduced by the Swatch corporation in 1998. It divides the day into 1,000 "beats" instead of hours, minutes, and seconds. Each beat is equivalent to 1 minute and 26.4 seconds. The day starts at midnight BMT (Biel Mean Time, UTC+1). You can learn more about Swatch Internet Time here:
 
 - https://www.swatch.com/en-us/internet-time.html
